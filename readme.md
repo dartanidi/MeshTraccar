@@ -1,17 +1,18 @@
 # Meshtastic to Traccar Bridge for Home Assistant
 
-An AppDaemon application for Home Assistant that bridges Meshtastic MQTT data to Traccar tracking server using the OsmAnd protocol. This bridge specifically focuses on filtering and forwarding only tracker devices from your Meshtastic mesh network.
+An AppDaemon application for Home Assistant that bridges Meshtastic MQTT data to Traccar tracking server using the OsmAnd protocol. This bridge intelligently identifies and forwards data only from GPS-enabled tracker devices in your Meshtastic mesh network.
 
 ## Overview
 
-This application subscribes to MQTT topics containing Meshtastic position data and forwards it to a Traccar server. It intelligently identifies and processes only tracker devices, filtering out other nodes in your mesh network that aren't meant for location tracking.
+This application subscribes to MQTT topics containing Meshtastic data and forwards position information to a Traccar server. It intelligently identifies devices with GPS capabilities in your mesh network and only forwards location data from those devices.
 
 ## Features
 
-- Intelligently identifies tracker devices in your Meshtastic mesh network
-- Subscribes to position and device info MQTT topics
-- Filters messages to only forward position data from tracker devices
-- Multiple methods to identify trackers (role, name, explicit configuration)
+- Intelligently identifies GPS-enabled devices in your Meshtastic mesh network
+- Automatically detects trackers based on GPS capabilities and device names
+- Subscribes to Meshtastic MQTT topics for position and device information
+- Filters messages to only forward position data from actual tracking devices
+- Multiple methods to identify trackers (GPS capabilities, names, explicit configuration)
 - Handles various Meshtastic message formats
 - Forwards position data to Traccar using the OsmAnd protocol
 - Includes altitude, speed, and battery information when available
@@ -39,14 +40,13 @@ Add the following to your `apps.yaml` file:
 meshtraccar:
   module: meshtraccar
   class: MeshtasticToTraccar
-  mqtt_topic: "meshtastic/+/json/position"  # Focus on position messages
-  device_info_topic: "meshtastic/+/json/nodeinfo"  # Topic for node info messages
+  mqtt_topic: "meshtastic/+/json/#"  # Monitor all JSON messages
+  position_topic_pattern: "position"  # Pattern for identifying position topics
   traccar_url: "http://your-traccar-server:5055"  # Update with your Traccar server URL
-  tracker_role: "TRACKER"  # Role that identifies tracker devices
-  tracker_nodes:  # Explicitly list node IDs to treat as trackers
+  tracker_nodes:  # Explicitly list node IDs to treat as trackers (optional)
     - "!abcd1234"
     - "!efgh5678" 
-  forward_all_positions: false  # Set to true to forward all devices' positions
+  forward_all_positions: false  # Set to true to forward all positions regardless of device type
   log_level: "INFO"  # Use "DEBUG" for more verbose logging
 ```
 
@@ -54,36 +54,37 @@ meshtraccar:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `mqtt_topic` | `meshtastic/+/json/position` | MQTT topic pattern to subscribe to for position data. |
-| `device_info_topic` | `meshtastic/+/json/nodeinfo` | MQTT topic pattern to subscribe to for device information. |
+| `mqtt_topic` | `meshtastic/+/json/#` | MQTT topic pattern to subscribe to for all Meshtastic JSON messages. |
+| `position_topic_pattern` | `position` | String pattern to identify position-specific topics. |
 | `traccar_url` | `http://your-traccar-server:5055` | URL of your Traccar server's OsmAnd endpoint. Typically port 5055. |
-| `tracker_role` | `TRACKER` | The role value that identifies tracker devices in the mesh. |
-| `tracker_nodes` | `[]` | List of node IDs to explicitly treat as trackers, regardless of their role. |
-| `forward_all_positions` | `false` | When set to true, forward all position data regardless of device role. |
+| `tracker_nodes` | `[]` | List of node IDs to explicitly treat as trackers, regardless of detected capabilities. |
+| `forward_all_positions` | `false` | When set to true, forward all position data regardless of device type. |
 | `log_level` | `INFO` | Logging level. Options: DEBUG, INFO, WARNING, ERROR. |
 
 ## How It Works
 
-1. The app subscribes to the position MQTT topic specified in the configuration.
-2. It also subscribes to the device info topic to identify which nodes are trackers.
-3. The app identifies trackers through three methods:
-   - Devices with the specified `tracker_role` in their node info
-   - Devices explicitly listed in the `tracker_nodes` configuration
-   - Devices with names containing "tracker", "gps", or "location" indicators
+1. The app subscribes to the MQTT topic specified in the configuration, capturing all Meshtastic JSON messages.
+2. It analyzes both position data and device information to identify devices with GPS capabilities.
+3. The app identifies trackers through several methods:
+   - Detecting GPS hardware capabilities in device information messages
+   - Finding GPS configuration settings in device configuration
+   - Recognizing tracker-related keywords in device names (like "tracker", "gps", etc.)
+   - Checking the list of explicitly configured tracker nodes
 4. When position data is received, it checks if it's from a known tracker device.
 5. If it is a tracker, the position data is extracted and forwarded to Traccar.
 6. Each tracker appears as a separate device in Traccar, identified by its node ID.
 
 ## Tracker Identification
 
-The application uses several methods to identify tracker devices:
+The application uses several methods to identify tracker devices in your Meshtastic network:
 
-1. **Role-based identification**: Devices with the role matching `tracker_role` configuration
-2. **Name-based identification**: Devices with names containing tracker-related terms
-3. **Explicit configuration**: Devices listed in the `tracker_nodes` configuration
-4. **Override option**: Setting `forward_all_positions` to true will forward all position data
+1. **GPS capabilities detection**: Automatically detects devices that have GPS hardware or enabled GPS settings
+2. **Name-based identification**: Identifies devices with names containing tracker-related terms
+3. **Position data analysis**: Recognizes devices sending valid GPS coordinates
+4. **Explicit configuration**: Uses devices listed in the `tracker_nodes` configuration
+5. **Override option**: Setting `forward_all_positions` to true will forward all position data
 
-This multi-layered approach ensures only relevant devices are forwarded to Traccar.
+This multi-layered approach ensures only relevant devices with actual GPS capabilities are forwarded to Traccar.
 
 ## Supported Meshtastic Message Formats
 
@@ -109,37 +110,26 @@ If you're not seeing data in Traccar:
 1. Set `log_level: "DEBUG"` in your configuration.
 2. Check the AppDaemon logs for detailed information about received messages and forwarding attempts.
 3. Verify that your Meshtastic nodes are publishing position data to MQTT.
-4. Ensure the tracker identification is working correctly. Check logs for "Identified tracker node" messages.
+4. Ensure the tracker identification is working correctly. Check logs for "Identified node" messages.
 5. Try setting `forward_all_positions: true` temporarily to see if any data is being received.
 6. Ensure your Traccar server is accessible from Home Assistant.
 
 Common issues:
 
-- **No trackers identified**: Check if your devices have the correct role or try adding them to `tracker_nodes`.
+- **No trackers identified**: Check if your devices have GPS capabilities or try adding them to `tracker_nodes`.
 - **Invalid position data warnings**: Some messages may not include position data.
 - **JSON decode errors**: Indicates malformed messages in your MQTT topic.
 - **HTTP errors when forwarding to Traccar**: Check connectivity and Traccar server configuration.
 
 ## Advanced Usage
 
-### Using Custom Roles
-
-If your Meshtastic network uses different roles than the default "TRACKER":
-
-```yaml
-meshtastic_to_traccar:
-  module: meshtastic_to_traccar
-  class: MeshtasticToTraccar
-  tracker_role: "GPS_TRACKER"  # Your custom role
-```
-
 ### Forwarding Specific Nodes Only
 
-To only forward specific nodes regardless of their role:
+To only forward specific nodes regardless of their GPS capabilities:
 
 ```yaml
-meshtastic_to_traccar:
-  module: meshtastic_to_traccar
+meshtraccar:
+  module: meshtraccar
   class: MeshtasticToTraccar
   tracker_nodes:
     - "!abcd1234"  # Only this node will be forwarded
@@ -151,10 +141,21 @@ meshtastic_to_traccar:
 During testing or in smaller networks, you might want to forward all position data:
 
 ```yaml
-meshtastic_to_traccar:
-  module: meshtastic_to_traccar
+meshtraccar:
+  module: meshtraccar
   class: MeshtasticToTraccar
   forward_all_positions: true  # Forward all position data
+```
+
+### Custom Position Topic Pattern
+
+If your Meshtastic setup uses a different naming pattern for position topics:
+
+```yaml
+meshtraccar:
+  module: meshtraccar
+  class: MeshtasticToTraccar
+  position_topic_pattern: "gps"  # Your custom position topic pattern
 ```
 
 ## License
@@ -162,7 +163,5 @@ meshtastic_to_traccar:
 [MIT License](LICENSE)
 
 ## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 Contributions are welcome! Please feel free to submit a Pull Request.
