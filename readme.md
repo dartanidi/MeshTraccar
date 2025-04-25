@@ -25,7 +25,7 @@ This application subscribes to MQTT topics containing Meshtastic position data a
 
 ## Installation
 
-1. Clone this repository or download the `meshtastic_to_traccar.py` file.
+1. Clone this repository or download the `meshtraccar.py` file.
 2. Copy the file to your AppDaemon apps directory (typically `/config/appdaemon/apps/`).
 3. Add the configuration to your `apps.yaml` file as shown below.
 4. Restart AppDaemon.
