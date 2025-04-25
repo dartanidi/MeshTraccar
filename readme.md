@@ -1,4 +1,4 @@
-# Meshtastic to Traccar Bridge
+# Meshtastic to Traccar Bridge for Home Assistant
 
 An AppDaemon application for Home Assistant that bridges Meshtastic MQTT data to Traccar tracking server using the OsmAnd protocol.
 
