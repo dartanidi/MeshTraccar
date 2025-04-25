@@ -35,8 +35,8 @@ This application subscribes to MQTT topics containing Meshtastic position data a
 Add the following to your `apps.yaml` file:
 
 ```yaml
-meshtastic_to_traccar:
-  module: meshtastic_to_traccar
+meshtraccar:
+  module: meshtraccar
   class: MeshtasticToTraccar
   mqtt_topic: "meshtastic/#"  # This wildcard catches all Meshtastic topics
   traccar_url: "http://your-traccar-server:5055"  # Update with your Traccar server URL
